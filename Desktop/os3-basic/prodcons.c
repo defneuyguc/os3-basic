@@ -48,6 +48,10 @@ static ITEM next_produce = 0;
 // number of items already consumed
 static int items_consumed = 0;
 
+// counters for report / comparison with advanced version
+static unsigned long signal_count    = 0;
+static unsigned long broadcast_count = 0;
+
 
 /* producer thread */
 static void * 
@@ -55,9 +59,10 @@ producer (void * arg)
 {
     (void) arg;
 
-    while (true)
+    while (true /* TODO: not all items produced */)
     {
-        // get the new item
+        // TODO: 
+        // * get the new item
         ITEM item = get_next_item();
 
         // no more jobs left
@@ -68,7 +73,19 @@ producer (void * arg)
 		
         rsleep (100);   // simulating all kind of activities...
 		
-        // put the item into buffer[]
+        // TODO:
+        // * put the item into buffer[]
+        //
+        // follow this pseudocode (according to the ConditionSynchronization lecture):
+        //      mutex-lock;
+        //      while not condition-for-this-producer
+        //          wait-cv;
+        //      critical-section;
+        //      possible-cv-signals;
+        //      mutex-unlock;
+        //
+        // (see condition_test() in condition_basics.c how to use condition variables)
+
         pthread_mutex_lock (&mutex);
 
         // wait until:
@@ -89,11 +106,13 @@ producer (void * arg)
 
         // consumer may proceed because buffer is not empty anymore
         pthread_cond_signal (&cv_consumer);
+        signal_count++;
 
         // wake producers because either:
         // - next_produce changed
         // - another producer may now be the correct one
         pthread_cond_broadcast (&cv_producer);
+        broadcast_count++;
 
         pthread_mutex_unlock (&mutex);
     }
@@ -106,8 +125,20 @@ consumer (void * arg)
 {
     (void) arg;
 
-    while (true)
+    while (true /* TODO: not all items retrieved from buffer[] */)
     {
+        // TODO: 
+        // * get the next item from buffer[]
+        // * print the number to stdout
+        //
+        // follow this pseudocode (according to the ConditionSynchronization lecture):
+        //      mutex-lock;
+        //      while not condition-for-this-consumer
+        //          wait-cv;
+        //      critical-section;
+        //      possible-cv-signals;
+        //      mutex-unlock;
+
         pthread_mutex_lock (&mutex);
 
         // wait while buffer is empty, unless all items are already consumed
@@ -131,11 +162,11 @@ consumer (void * arg)
 
         // producers may proceed because there is free space now
         pthread_cond_broadcast (&cv_producer);
+        broadcast_count++;
 
         pthread_mutex_unlock (&mutex);
-
-        // simulate other work outside critical section
-        rsleep (100);
+		
+        rsleep (100);       // simulating all kind of activities...
 
         // print item to stdout
         printf ("%d\n", item);
@@ -145,6 +176,10 @@ consumer (void * arg)
 
 int main (void)
 {
+    // TODO: 
+    // * startup the producer threads and the consumer thread
+    // * wait until all threads are finished
+
     pthread_t producers[NROF_PRODUCERS];
     pthread_t cons;
 
@@ -163,13 +198,18 @@ int main (void)
         pthread_join (producers[i], NULL);
     }
 
-    // wake consumer once more in case it is waiting at the end
+    // wake consumer once more in case it is waiting at the very end
     pthread_mutex_lock (&mutex);
     pthread_cond_signal (&cv_consumer);
+    signal_count++;
     pthread_mutex_unlock (&mutex);
 
     // wait until consumer is finished
     pthread_join (cons, NULL);
+
+    // print stats for comparison with advanced feature
+    fprintf (stderr, "signals    : %lu\n", signal_count);
+    fprintf (stderr, "broadcasts : %lu\n", broadcast_count);
     
     return (0);
 }
